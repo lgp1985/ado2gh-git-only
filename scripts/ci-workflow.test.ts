@@ -126,6 +126,8 @@ describe('GEI workflow and Git validation', () => {
     expect(migrationScript).toContain("'push', 'github', 'refs/tags/*:refs/tags/*'");
     expect(migrationScript).not.toContain("'push', '--mirror'");
     expect(migrationScript).not.toContain("'push', '--force'");
+    expect(migrationScript).toContain('-C $temporaryRoot @Arguments');
+    expect(readFileSync(comparerPath, 'utf8')).toContain('-C $temporaryRoot @Arguments');
   });
 
   it('rejects missing project configuration and missing trial approval', () => {

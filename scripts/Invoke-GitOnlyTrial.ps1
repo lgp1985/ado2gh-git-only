@@ -97,7 +97,7 @@ function Invoke-Git {
         $output = @(& git -c safe.bareRepository=all -C $WorkingDirectory @Arguments 2>&1)
     }
     else {
-        $output = @(& git -c safe.bareRepository=all @Arguments 2>&1)
+        $output = @(& git -c safe.bareRepository=all -C $temporaryRoot @Arguments 2>&1)
     }
     if ($LASTEXITCODE -ne 0) {
         throw "Git command failed (exit $LASTEXITCODE): $($output -join ' ')"
