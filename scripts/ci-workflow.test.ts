@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
@@ -24,11 +24,11 @@ function git(directory: string, ...args: string[]) {
   });
 }
 
-function runPowerShell(script: string, args: string[]) {
+function runPowerShell(script: string, args: string[], env = process.env) {
   return spawnSync(
     powershell,
     ['-NoLogo', '-NoProfile', '-File', script, ...args],
-    { cwd: root, encoding: 'utf8' },
+    { cwd: root, encoding: 'utf8', env },
   );
 }
 
@@ -235,6 +235,44 @@ describe('GEI workflow and Git validation', () => {
     ]);
     expect(missingApproval.status).not.toBe(0);
     expect(`${missingApproval.stdout}${missingApproval.stderr}`).toContain('I_APPROVE_GIT_TRIAL');
+  });
+
+  it('explains destination 404s before any Git write', () => {
+    const fakeGhDirectory = join(fixtureRoot, 'fake-gh');
+    mkdirSync(fakeGhDirectory);
+    if (process.platform === 'win32') {
+      writeFileSync(join(fakeGhDirectory, 'gh.cmd'), '@echo off\r\necho gh: Not Found (HTTP 404) 1>&2\r\necho {"message":"Not Found","status":"404"} 1>&2\r\nexit /b 1\r\n');
+    } else {
+      const fakeGh = join(fakeGhDirectory, 'gh');
+      writeFileSync(fakeGh, '#!/bin/sh\necho "gh: Not Found (HTTP 404)" >&2\necho \'{"message":"Not Found","status":"404"}\' >&2\nexit 1\n');
+      execFileSync('chmod', ['+x', fakeGh]);
+    }
+
+    const result = runPowerShell(
+      join(root, 'scripts', 'Invoke-GitOnlyTrial.ps1'),
+      [
+        '-SourceOrg', 'ado-example',
+        '-SourceProject', 'project',
+        '-SourceRepo', 'source-repo',
+        '-TargetOwner', 'personal-user',
+        '-TargetRepo', 'source-repo-trial',
+        '-IncludeLfs', 'false',
+        '-TrialConfirmation', 'I_APPROVE_GIT_TRIAL',
+      ],
+      {
+        ...process.env,
+        PATH: `${fakeGhDirectory}${delimiter}${process.env.PATH ?? ''}`,
+        ADO_PAT: 'test-only',
+        GH_PAT: 'test-only',
+        GH_TOKEN: 'test-only',
+      },
+    );
+    const output = `${result.stdout}${result.stderr}`;
+    const normalizedOutput = output.replace(/\r?\n/g, ' ').replace(/\s*\|\s*/g, ' ');
+    expect(result.status).not.toBe(0);
+    expect(normalizedOutput).toContain('Destination repository preflight returned HTTP 404.');
+    expect(normalizedOutput).toContain('GitHub can return 404 for private repositories the token cannot see.');
+    expect(normalizedOutput).toContain('No Git refs were');
   });
 
   it('reports annotated-tag, branch, and history discrepancies', () => {

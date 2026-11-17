@@ -126,7 +126,16 @@ function Restore-GitEnvironment {
 
 $escapedOwner = [uri]::EscapeDataString($TargetOwner)
 $escapedTargetRepo = [uri]::EscapeDataString($TargetRepo)
-$metadataLines = Invoke-Gh -Arguments @('api', "repos/$escapedOwner/$escapedTargetRepo")
+try {
+    $metadataLines = Invoke-Gh -Arguments @('api', "repos/$escapedOwner/$escapedTargetRepo")
+}
+catch {
+    $errorMessage = $_.Exception.Message
+    if ($errorMessage -match 'Not Found \(HTTP 404\)') {
+        throw "Destination repository preflight returned HTTP 404. Verify that '$TargetOwner/$TargetRepo' exists and that GH_PAT can access it; GitHub can return 404 for private repositories the token cannot see. No Git refs were pushed. GitHub CLI details: $errorMessage"
+    }
+    throw
+}
 $destination = ($metadataLines -join "`n") | ConvertFrom-Json
 if ($destination.owner.type -ne 'User' -or $destination.owner.login -ine $TargetOwner) {
     throw 'Destination must be a repository owned by the specified personal GitHub account.'

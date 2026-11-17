@@ -60,4 +60,4 @@ if ($ExecuteTrial -eq 'true') {
     }
 }
 
-Write-Host 'Git-only migration inputs are valid. No remote request or migration was performed.'
+Write-Host 'Git-only migration inputs are valid.'

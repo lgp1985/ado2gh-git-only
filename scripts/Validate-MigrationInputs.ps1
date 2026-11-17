@@ -74,4 +74,4 @@ if ($ExecuteTrial -eq 'true' -and $TrialConfirmation -cne 'I_APPROVE_TRIAL') {
     throw "A real trial requires execute_trial=true and trial_confirmation=I_APPROVE_TRIAL."
 }
 
-Write-Host 'Migration inputs are valid. No remote request or migration was performed.'
+Write-Host 'Migration inputs are valid.'
