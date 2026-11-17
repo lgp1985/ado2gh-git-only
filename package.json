@@ -1,0 +1,13 @@
+{
+  "name": "ado2gh-migration-showcase",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.19.0",
+  "scripts": {
+    "test:ci-workflow": "vitest run scripts/ci-workflow.test.ts"
+  },
+  "devDependencies": {
+    "vitest": "5.1.0",
+    "yaml": "2.9.1"
+  }
+}

@@ -4,7 +4,7 @@
 
 This showcase is for Git source migration using GitHub Enterprise Importer (GEI) and its `gh ado2gh` extension. GEI is documented for Azure DevOps **Cloud** to GitHub **Enterprise Cloud** (GitHub.com or GHE.com); it does not support Azure DevOps Server as a source. The destination must be an organization, not a personal account's repository. A personal account can own or administer an organization, but that does not make the personal repository itself a supported GEI destination.
 
-The requested destination, `https://github.com/lgp1985/`, is a personal account URL. It is not eligible as a GEI destination. The GitHub migration documentation identifies GitHub Enterprise Cloud as the destination, but the reviewed migration pages do not establish this account's subscription, trial entitlement, or billing terms. An Enterprise owner must verify the intended organization's plan and migration entitlement before a trial. Do not treat GEI as a free personal-account migration feature.
+The requested destination, `https://github.com/lgp1985/`, is a personal account URL. It is not eligible as a GEI destination. The GitHub migration documentation identifies GitHub Enterprise Cloud as the destination, but the reviewed migration pages do not establish whether GEI has a separate migration charge or this account's subscription/trial entitlement. An Enterprise owner must verify the intended organization's plan and migration entitlement before a trial. Do not treat GEI as a free personal-account migration feature.
 
 The supplied Azure DevOps URL is `https://dev.azure.com/lgp1985/_git/iTextSharp`. An unauthenticated request redirected to Microsoft sign-in; the link contains no project component. It does not prove that `lgp1985` is the organization, that `iTextSharp` is the repository's exact name, or which project contains it. Microsoft documents the standard clone URL shape as:
 
@@ -19,7 +19,7 @@ Before any migration, an Azure DevOps project/repository owner must provide or v
 Choose one before any actual trial:
 
 1. **Stay on GEI:** provide the name of an existing GitHub Enterprise Cloud organization approved for a sandbox trial, and confirm its Enterprise owner has verified the applicable licensing/entitlement. This is the path implemented here.
-2. **Target the personal account:** explicitly approve a separate Git-only migration design. GitHub Importer or a carefully staged `git clone --mirror` / `git push --mirror` can transfer Git refs to a newly created personal repository, but it does not provide GEI's pull-request or other supported metadata migration. `git push --mirror` can delete remote refs that are absent locally, so it must only target a verified, empty, dedicated repository and requires a separate review and explicit remote-write approval. This alternative is not implemented here.
+2. **Target the personal account:** explicitly approve a separate Git-only migration design. GitHub's browser-based Importer can import Git source/history where source authentication and product support permit, but Microsoft documents that it does not migrate pull requests, work-item links, or branch policies. A carefully staged `git clone --mirror` / `git push --mirror` gives more control over the Git refs sent to a newly created personal repository, but it also does not provide GEI metadata migration. Mirror pushes can delete remote refs that are absent locally, so they must target a verified, empty, dedicated repository and require separate review and explicit remote-write approval. Neither alternative is implemented here.
 
 No destination has been substituted and no remote repository has been created.
 
@@ -57,6 +57,8 @@ GEI's documented ADO2GH flow uses classic personal access tokens (PATs), not fin
 - **GitHub `GH_PAT`:** for an organization owner, the documented migration scopes are `repo`, `workflow`, and `admin:org`; for a migrator, `repo`, `workflow`, and `read:org`. Use the applicable role, allow access to the destination organization, and do not broaden scopes beyond the documented task. The classic-PAT requirement is incompatible with an organization policy that blocks classic PAT access.
 
 Create these only in the approved workflow's Actions secrets (`ADO_PAT`, `GH_PAT`), not in source files, workflow inputs, command arguments, chat, or logs. Keep them out of job summaries and artifacts. Configure the `gei-trial` GitHub Environment with required reviewers before enabling trial execution. The workflow also requires an explicit dispatch input confirmation; it is not run as part of this preparation.
+
+The optional `inventory-report` is not part of the migration job. GitHub's access guide recommends a full-access ADO PAT to use that command; do not widen the workflow's read-only ADO PAT for inventory. If that optional report is needed, obtain separate approval for its access, generate it in an access-controlled environment, and keep the resulting CSV private.
 
 Review network restrictions and temporarily handle identity-provider restrictions as directed by GitHub's [access guide](https://docs.github.com/en/migrations/ado/manage-access). Where applicable, permit the documented GitHub migration traffic and add `Repository migrations` to relevant ruleset bypass lists for the duration of migration.
 
@@ -97,7 +99,7 @@ The tracked [`Compare-GitRepositories.ps1`](../scripts/Compare-GitRepositories.p
 - Git LFS pointer listings; and
 - refs outside `refs/heads/*` and `refs/tags/*`, which it reports as excluded from the comparison rather than treating as transferable.
 
-The script does not claim that LFS payloads are present, that excluded refs can be migrated, or that PR/ADO metadata matches. It does not save a report file. Keep its terminal output private for private repositories.
+The LFS pointer inventory covers all refs in each mirror, including refs excluded from branch/tag comparison; interpret LFS differences alongside the excluded-ref report. The script does not claim that LFS payloads are present, that excluded refs can be migrated, or that PR/ADO metadata matches. It does not save a report file. Keep its terminal output private for private repositories.
 
 With approved credentials already provisioned as environment variables (never paste PAT values into a command or source file), run:
 
@@ -130,6 +132,9 @@ The tests do not require tokens, access either remote, run `gh ado2gh migrate-re
 - [GitHub: Prepare for migration and inventory](https://docs.github.com/en/migrations/ado/prepare-for-your-migration-from-azure-devops-to-github)
 - [GitHub: Manage migration access](https://docs.github.com/en/migrations/ado/manage-access)
 - [GitHub: Install and configure GEI](https://docs.github.com/en/migrations/ado/install-and-configure-github-enterprise-importer)
+- [GitHub: Upstream ADO2GH `migrate-repo` options](https://github.com/github/gh-gei/blob/main/src/ado2gh/Commands/MigrateRepo/MigrateRepoCommand.cs)
 - [GitHub: GEI overview and supported paths](https://docs.github.com/en/migrations/using-github-enterprise-importer/understanding-github-enterprise-importer/about-github-enterprise-importer)
 - [Microsoft Learn: Azure Repos clone URL and cloning](https://learn.microsoft.com/en-us/azure/devops/repos/git/clone?view=azure-devops)
 - [Microsoft Learn: Migration options and ADO2GH command example](https://learn.microsoft.com/en-us/azure/devops/organizations/projects/migrate-public-project?view=azure-devops)
+- [GitHub CLI: Installing an extension at a pinned release](https://cli.github.com/manual/gh_extension_install)
+- [GitHub: ADO2GH release used by the workflow](https://github.com/github/gh-ado2gh/releases/tag/v1.35.0)

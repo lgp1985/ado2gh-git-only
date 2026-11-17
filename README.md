@@ -17,7 +17,7 @@ This repository prepares a repeatable, manually approved GitHub Enterprise Impor
 - [Scripts](scripts/)
 - [Local checks and Git comparison procedure](docs/migration-plan.md#git-validation)
 
-The workflow defaults to validation-only. A real trial requires both `execute_trial: true` and the exact `trial_confirmation: I_APPROVE_TRIAL`; it checks the destination organization and refuses to migrate into an existing repository. It does not create, delete, or overwrite repositories itself. Production cutover is deliberately not exposed by this trial workflow.
+The workflow defaults to validation-only. A real trial requires both `execute_trial: true` and the exact `trial_confirmation: I_APPROVE_TRIAL`; it checks the destination organization and refuses to migrate into an existing repository. Validation-only runs create no remote resources. An approved GEI run creates the new destination; the workflow never deletes or overwrites an existing repository. Production cutover is deliberately not exposed by this trial workflow.
 
 ## Local test
 

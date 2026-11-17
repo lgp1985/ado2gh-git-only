@@ -1,0 +1,114 @@
+name: GEI trial migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_org:
+        description: Verified Azure DevOps organization
+        type: string
+        required: true
+      source_project:
+        description: Verified Azure DevOps team project (required by ADO2GH)
+        type: string
+        required: true
+      source_repo:
+        description: Verified Azure DevOps repository name
+        type: string
+        required: true
+      target_org:
+        description: Existing GitHub Enterprise Cloud organization
+        type: string
+        required: true
+      target_repo:
+        description: New, unique, private trial repository name
+        type: string
+        required: true
+      target_api_url:
+        description: Optional GHE.com base API URL, for example https://api.example.ghe.com
+        type: string
+        required: false
+      execute_trial:
+        description: false validates inputs and tools only; true performs a real migration
+        type: boolean
+        required: true
+        default: false
+      trial_confirmation:
+        description: Must be exactly I_APPROVE_TRIAL to execute a real migration
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gei-${{ inputs.target_org }}-${{ inputs.target_repo }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Validate or migrate one repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: gei-trial
+    steps:
+      - name: Check out migration project
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate dispatch inputs
+        shell: pwsh
+        env:
+          SOURCE_ORG: ${{ inputs.source_org }}
+          SOURCE_PROJECT: ${{ inputs.source_project }}
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          TARGET_ORG: ${{ inputs.target_org }}
+          TARGET_REPO: ${{ inputs.target_repo }}
+          TARGET_API_URL: ${{ inputs.target_api_url }}
+          EXECUTE_TRIAL: ${{ inputs.execute_trial }}
+          TRIAL_CONFIRMATION: ${{ inputs.trial_confirmation }}
+        run: |
+          ./scripts/Validate-MigrationInputs.ps1 `
+            -SourceOrg $env:SOURCE_ORG `
+            -SourceProject $env:SOURCE_PROJECT `
+            -SourceRepo $env:SOURCE_REPO `
+            -TargetOrg $env:TARGET_ORG `
+            -TargetRepo $env:TARGET_REPO `
+            -TargetApiUrl $env:TARGET_API_URL `
+            -ExecuteTrial $env:EXECUTE_TRIAL `
+            -TrialConfirmation $env:TRIAL_CONFIRMATION
+
+      - name: Verify runner tools
+        shell: pwsh
+        run: ./scripts/Check-RunnerTools.ps1
+
+      - name: Install ADO2GH extension
+        shell: pwsh
+        run: ./scripts/Install-Ado2Gh.ps1
+
+      - name: Verify ADO2GH commands
+        shell: pwsh
+        run: ./scripts/Check-RunnerTools.ps1 -RequireAdo2Gh
+
+      - name: Run approved trial migration
+        if: ${{ inputs.execute_trial }}
+        shell: pwsh
+        env:
+          SOURCE_ORG: ${{ inputs.source_org }}
+          SOURCE_PROJECT: ${{ inputs.source_project }}
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          TARGET_ORG: ${{ inputs.target_org }}
+          TARGET_REPO: ${{ inputs.target_repo }}
+          TARGET_API_URL: ${{ inputs.target_api_url }}
+          TRIAL_CONFIRMATION: ${{ inputs.trial_confirmation }}
+          ADO_PAT: ${{ secrets.ADO_PAT }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          ./scripts/Invoke-GeiTrial.ps1 `
+            -SourceOrg $env:SOURCE_ORG `
+            -SourceProject $env:SOURCE_PROJECT `
+            -SourceRepo $env:SOURCE_REPO `
+            -TargetOrg $env:TARGET_ORG `
+            -TargetRepo $env:TARGET_REPO `
+            -TargetApiUrl $env:TARGET_API_URL `
+            -TrialConfirmation $env:TRIAL_CONFIRMATION
