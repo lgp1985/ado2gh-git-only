@@ -8,7 +8,9 @@ import { parse } from 'yaml';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workflowPath = join(root, '.github', 'workflows', 'gei-migrate.yml');
+const gitOnlyWorkflowPath = join(root, '.github', 'workflows', 'git-only-trial.yml');
 const validatorPath = join(root, 'scripts', 'Validate-MigrationInputs.ps1');
+const gitOnlyValidatorPath = join(root, 'scripts', 'Validate-GitOnlyInputs.ps1');
 const comparerPath = join(root, 'scripts', 'Compare-GitRepositories.ps1');
 const powershell = 'pwsh';
 let fixtureRoot = '';
@@ -85,8 +87,11 @@ describe('GEI workflow and Git validation', () => {
 
   it('is manually triggered, targets ubuntu-latest, and pins external actions', () => {
     const workflow = parse(readFileSync(workflowPath, 'utf8'));
+    const gitOnlyWorkflow = parse(readFileSync(gitOnlyWorkflowPath, 'utf8'));
     expect(workflow.on.workflow_dispatch).toBeDefined();
+    expect(gitOnlyWorkflow.on.workflow_dispatch).toBeDefined();
     expect(workflow.jobs.migrate['runs-on']).toBe('ubuntu-latest');
+    expect(gitOnlyWorkflow.jobs.migrate['runs-on']).toBe('ubuntu-latest');
     expect(workflow.jobs.migrate.steps.some((step: { run?: string }) =>
       step.run?.includes('Install-Ado2Gh.ps1'))).toBe(true);
     expect(readFileSync(join(root, 'scripts', 'Install-Ado2Gh.ps1'), 'utf8'))
@@ -94,13 +99,33 @@ describe('GEI workflow and Git validation', () => {
     expect(workflow.jobs.migrate.steps.some((step: { if?: string }) =>
       step.if?.includes('inputs.execute_trial'))).toBe(true);
 
-    const actionReferences = [...readFileSync(workflowPath, 'utf8').matchAll(/^\s*uses:\s*(\S+)\s+#\s*v\S+\s*$/gm)];
-    expect(actionReferences.length).toBeGreaterThan(0);
-    for (const [, reference] of actionReferences) {
-      expect(reference).toMatch(/^[^@]+@[0-9a-f]{40}$/i);
+    for (const path of [workflowPath, gitOnlyWorkflowPath]) {
+      const actionReferences = [...readFileSync(path, 'utf8').matchAll(/^\s*uses:\s*(\S+)\s+#\s*v\S+\s*$/gm)];
+      expect(actionReferences.length).toBeGreaterThan(0);
+      for (const [, reference] of actionReferences) {
+        expect(reference).toMatch(/^[^@]+@[0-9a-f]{40}$/i);
+      }
     }
     expect(readFileSync(workflowPath, 'utf8')).toContain('secrets.ADO_PAT');
     expect(readFileSync(workflowPath, 'utf8')).toContain('secrets.GH_PAT');
+  });
+
+  it('keeps the personal-account workflow gated and avoids destructive mirror pushes', () => {
+    const workflowText = readFileSync(gitOnlyWorkflowPath, 'utf8');
+    const workflow = parse(workflowText);
+    expect(workflow.on.workflow_dispatch).toBeDefined();
+    expect(workflow.jobs.migrate['runs-on']).toBe('ubuntu-latest');
+    expect(workflow.jobs.migrate.steps.some((step: { if?: string }) =>
+      step.if?.includes('inputs.execute_trial'))).toBe(true);
+    expect(workflowText).toContain('default: false');
+    expect(workflowText).toContain('secrets.ADO_PAT');
+    expect(workflowText).toContain('secrets.GH_PAT');
+
+    const migrationScript = readFileSync(join(root, 'scripts', 'Invoke-GitOnlyTrial.ps1'), 'utf8');
+    expect(migrationScript).toContain("'push', 'github', 'refs/heads/*:refs/heads/*'");
+    expect(migrationScript).toContain("'push', 'github', 'refs/tags/*:refs/tags/*'");
+    expect(migrationScript).not.toContain("'push', '--mirror'");
+    expect(migrationScript).not.toContain("'push', '--force'");
   });
 
   it('rejects missing project configuration and missing trial approval', () => {
@@ -173,6 +198,44 @@ describe('GEI workflow and Git validation', () => {
     expect(result.stdout).toContain('Source refs not compared: refs/pull/1/head');
     expect(result.stdout).toContain('LFS pointer listings include all local mirror refs');
   }, 30000);
+
+  it('validates personal-account trial destinations and approval', () => {
+    const valid = runPowerShell(gitOnlyValidatorPath, [
+      '-SourceOrg', 'ado-example',
+      '-SourceProject', 'project name',
+      '-SourceRepo', 'source-repo',
+      '-TargetOwner', 'personal-user',
+      '-TargetRepo', 'source-repo-trial',
+      '-IncludeLfs', 'false',
+      '-ExecuteTrial', 'true',
+      '-TrialConfirmation', 'I_APPROVE_GIT_TRIAL',
+    ]);
+    expect(valid.status, `${valid.stdout}${valid.stderr}`).toBe(0);
+
+    const unsafeTarget = runPowerShell(gitOnlyValidatorPath, [
+      '-SourceOrg', 'ado-example',
+      '-SourceProject', 'project',
+      '-SourceRepo', 'source-repo',
+      '-TargetOwner', 'personal-user',
+      '-TargetRepo', 'production-repo',
+      '-ExecuteTrial', 'true',
+      '-TrialConfirmation', 'I_APPROVE_GIT_TRIAL',
+    ]);
+    expect(unsafeTarget.status).not.toBe(0);
+    expect(`${unsafeTarget.stdout}${unsafeTarget.stderr}`).toContain("must end in '-trial' or '-sandbox'");
+
+    const missingApproval = runPowerShell(gitOnlyValidatorPath, [
+      '-SourceOrg', 'ado-example',
+      '-SourceProject', 'project',
+      '-SourceRepo', 'source-repo',
+      '-TargetOwner', 'personal-user',
+      '-TargetRepo', 'source-repo-trial',
+      '-ExecuteTrial', 'true',
+      '-TrialConfirmation', '',
+    ]);
+    expect(missingApproval.status).not.toBe(0);
+    expect(`${missingApproval.stdout}${missingApproval.stderr}`).toContain('I_APPROVE_GIT_TRIAL');
+  });
 
   it('reports annotated-tag, branch, and history discrepancies', () => {
     const targetWorktree = join(fixtureRoot, 'target-worktree');

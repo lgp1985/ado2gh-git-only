@@ -66,16 +66,7 @@ jobs:
           TARGET_API_URL: ${{ inputs.target_api_url }}
           EXECUTE_TRIAL: ${{ inputs.execute_trial }}
           TRIAL_CONFIRMATION: ${{ inputs.trial_confirmation }}
-        run: |
-          ./scripts/Validate-MigrationInputs.ps1 `
-            -SourceOrg $env:SOURCE_ORG `
-            -SourceProject $env:SOURCE_PROJECT `
-            -SourceRepo $env:SOURCE_REPO `
-            -TargetOrg $env:TARGET_ORG `
-            -TargetRepo $env:TARGET_REPO `
-            -TargetApiUrl $env:TARGET_API_URL `
-            -ExecuteTrial $env:EXECUTE_TRIAL `
-            -TrialConfirmation $env:TRIAL_CONFIRMATION
+        run: ./scripts/Validate-MigrationInputs.ps1 -SourceOrg $env:SOURCE_ORG -SourceProject $env:SOURCE_PROJECT -SourceRepo $env:SOURCE_REPO -TargetOrg $env:TARGET_ORG -TargetRepo $env:TARGET_REPO -TargetApiUrl $env:TARGET_API_URL -ExecuteTrial $env:EXECUTE_TRIAL -TrialConfirmation $env:TRIAL_CONFIRMATION
 
       - name: Verify runner tools
         shell: pwsh
@@ -103,12 +94,4 @@ jobs:
           ADO_PAT: ${{ secrets.ADO_PAT }}
           GH_PAT: ${{ secrets.GH_PAT }}
           GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          ./scripts/Invoke-GeiTrial.ps1 `
-            -SourceOrg $env:SOURCE_ORG `
-            -SourceProject $env:SOURCE_PROJECT `
-            -SourceRepo $env:SOURCE_REPO `
-            -TargetOrg $env:TARGET_ORG `
-            -TargetRepo $env:TARGET_REPO `
-            -TargetApiUrl $env:TARGET_API_URL `
-            -TrialConfirmation $env:TRIAL_CONFIRMATION
+        run: ./scripts/Invoke-GeiTrial.ps1 -SourceOrg $env:SOURCE_ORG -SourceProject $env:SOURCE_PROJECT -SourceRepo $env:SOURCE_REPO -TargetOrg $env:TARGET_ORG -TargetRepo $env:TARGET_REPO -TargetApiUrl $env:TARGET_API_URL -TrialConfirmation $env:TRIAL_CONFIRMATION

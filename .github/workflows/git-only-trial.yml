@@ -1,0 +1,90 @@
+name: Git-only personal-account trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_org:
+        description: Verified Azure DevOps organization
+        type: string
+        required: true
+      source_project:
+        description: Verified Azure DevOps team project
+        type: string
+        required: true
+      source_repo:
+        description: Verified Azure DevOps repository name
+        type: string
+        required: true
+      target_owner:
+        description: GitHub personal-account login
+        type: string
+        required: true
+      target_repo:
+        description: New, empty, private repository ending in -trial or -sandbox
+        type: string
+        required: true
+      include_lfs:
+        description: Explicitly fetch and upload Git LFS objects if pointers are found
+        type: boolean
+        required: true
+        default: false
+      execute_trial:
+        description: false validates inputs and tools only; true performs a real Git write
+        type: boolean
+        required: true
+        default: false
+      trial_confirmation:
+        description: Must be exactly I_APPROVE_GIT_TRIAL to execute a real trial
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: git-only-${{ inputs.target_owner }}-${{ inputs.target_repo }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Validate or migrate Git refs
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: git-only-trial
+    steps:
+      - name: Check out migration project
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Validate dispatch inputs
+        shell: pwsh
+        env:
+          SOURCE_ORG: ${{ inputs.source_org }}
+          SOURCE_PROJECT: ${{ inputs.source_project }}
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          TARGET_OWNER: ${{ inputs.target_owner }}
+          TARGET_REPO: ${{ inputs.target_repo }}
+          INCLUDE_LFS: ${{ inputs.include_lfs }}
+          EXECUTE_TRIAL: ${{ inputs.execute_trial }}
+          TRIAL_CONFIRMATION: ${{ inputs.trial_confirmation }}
+        run: ./scripts/Validate-GitOnlyInputs.ps1 -SourceOrg $env:SOURCE_ORG -SourceProject $env:SOURCE_PROJECT -SourceRepo $env:SOURCE_REPO -TargetOwner $env:TARGET_OWNER -TargetRepo $env:TARGET_REPO -IncludeLfs $env:INCLUDE_LFS -ExecuteTrial $env:EXECUTE_TRIAL -TrialConfirmation $env:TRIAL_CONFIRMATION
+
+      - name: Verify runner tools
+        shell: pwsh
+        run: ./scripts/Check-RunnerTools.ps1
+
+      - name: Run approved Git-only trial
+        if: ${{ inputs.execute_trial }}
+        shell: pwsh
+        env:
+          SOURCE_ORG: ${{ inputs.source_org }}
+          SOURCE_PROJECT: ${{ inputs.source_project }}
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          TARGET_OWNER: ${{ inputs.target_owner }}
+          TARGET_REPO: ${{ inputs.target_repo }}
+          INCLUDE_LFS: ${{ inputs.include_lfs }}
+          TRIAL_CONFIRMATION: ${{ inputs.trial_confirmation }}
+          ADO_PAT: ${{ secrets.ADO_PAT }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: ./scripts/Invoke-GitOnlyTrial.ps1 -SourceOrg $env:SOURCE_ORG -SourceProject $env:SOURCE_PROJECT -SourceRepo $env:SOURCE_REPO -TargetOwner $env:TARGET_OWNER -TargetRepo $env:TARGET_REPO -IncludeLfs $env:INCLUDE_LFS -TrialConfirmation $env:TRIAL_CONFIRMATION
